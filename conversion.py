@@ -4,16 +4,21 @@ def encoding(test_value):
     b = [x.split('-')[1] for x in code]
     
     converted = ''
-    for char in str(test_value):
-        if char in a:
-            converted += char
-        elif char in b:
-            converted += a[b.index(char)]
-    
-    return converted, ''.join(sorted(converted))
+    value_is_number = isinstance(test_value, (int, float))
+    if (value_is_number):
+        for char in str(test_value):
+            if char in a:
+                converted += char
+            elif char in b:
+                converted += a[b.index(char)]
+        
+        return converted, ''.join(sorted(converted))
+    else: 
+        return None, None
 
 def conversion(nomFichierOriginal, nomFichierConversion):
     import pandas as pd
+    import numpy as np
 
     # Lire le fichier Excel d'origine
     df = pd.read_excel(nomFichierOriginal, header=None)
@@ -24,27 +29,25 @@ def conversion(nomFichierOriginal, nomFichierConversion):
         df.to_excel(writer, sheet_name='Original', index=False)
         
         # Créer des DataFrames pour les valeurs converties
-        df_unsorted = pd.DataFrame()
-        df_sorted = pd.DataFrame()
+        df_unsorted = pd.DataFrame(index=range(len(df)))
+        df_sorted = pd.DataFrame(index=range(len(df)))
         
         # Parcourir toutes les colonnes qui contiennent des données
         for col in df.columns:
             # Convertir en string et supprimer les espaces
             df[col] = df[col].astype(str).str.strip()
+            col_name = f"Col_{col+1}"
             
-            # Vérifier si les valeurs sont numériques
-            numeric_mask = df[col].str.isnumeric()
+            # Initialiser les colonnes avec les valeurs originales
+            df_unsorted[col_name] = df[col]
+            df_sorted[col_name] = df[col]
             
-            if numeric_mask.any():
-                # Appliquer la conversion et récupérer les deux versions
-                conversions = df[col][numeric_mask].apply(encoding)
-                unsorted_values = [x[0] for x in conversions]
-                sorted_values = [x[1] for x in conversions]
-                
-                # Ajouter les colonnes aux DataFrames
-                col_name = f"Col_{col+1}"
-                df_unsorted[col_name] = pd.Series(unsorted_values)
-                df_sorted[col_name] = pd.Series(sorted_values)
+            # Traiter chaque valeur dans la colonne
+            for idx, value in df[col].items():
+                # if value.isnumeric():  # Traiter seulement les valeurs numériques
+                unsorted, sorted_val = encoding(value)
+                df_unsorted.at[idx, col_name] = unsorted
+                df_sorted.at[idx, col_name] = sorted_val
         
         # Sauvegarder les feuilles converties
         if not df_unsorted.empty:

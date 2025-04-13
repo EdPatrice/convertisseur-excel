@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from conversion import encoding
 import io
 
@@ -12,6 +13,8 @@ L'application traite toutes les colonnes de votre fichier Excel, en ne gardant q
 Pour chaque valeur convertie, vous obtiendrez deux versions :
 - La version convertie non triée
 - La version convertie triée en ordre croissant
+
+Note: L'application convertira toutes les valeurs numériques dans chaque colonne, même si certaines colonnes contiennent des valeurs non numériques.
 """)
 st.markdown("<br><br>", unsafe_allow_html=True)
 
@@ -27,32 +30,33 @@ if uploaded_file is not None:
     # Lecture du fichier Excel
     df_original = pd.read_excel(uploaded_file, header=None)
     
-    # Initialisation des DataFrames pour les versions converties
-    df_unsorted = pd.DataFrame()
-    df_sorted = pd.DataFrame()
+    # Créer des DataFrames pour les valeurs converties avec le même nombre de lignes que l'original
+    df_unsorted = pd.DataFrame(index=range(len(df_original)))
+    df_sorted = pd.DataFrame(index=range(len(df_original)))
     
     # Traitement de chaque colonne
     for col in df_original.columns:
         # Conversion en string et nettoyage
-        df_original[col] = df_original[col].astype(str).str.strip()
-        numeric_mask = df_original[col].str.isnumeric()
+        # df_original[col] = df_original[col].astype(str).str.strip()
+        # df_original[col] = df_original[col].astype(int)
+        col_name = f"Col_{col+1}"
         
-        if numeric_mask.any():
-            # Conversion des valeurs numériques
-            conversions = df_original[col][numeric_mask].apply(encoding)
-            unsorted_values = [x[0] for x in conversions]
-            sorted_values = [x[1] for x in conversions]
-            
-            # Ajout des colonnes converties
-            col_name = f"Col_{col+1}"
-            df_unsorted[col_name] = pd.Series(unsorted_values)
-            df_sorted[col_name] = pd.Series(sorted_values)
+        # Initialiser les colonnes avec NaN
+        # df_unsorted[col_name] = np.nan
+        # df_sorted[col_name] = np.nan
+        
+        # Traiter chaque valeur individuellement
+        for idx, value in df_original[col].items():
+            # if value.isnumeric():  # Traiter seulement les valeurs numériques
+            unsorted, sorted_val = encoding(value)
+            df_unsorted.at[idx, col_name] = unsorted
+            df_sorted.at[idx, col_name] = sorted_val
     
     # Affichage des données
     st.write("Données originales:")
     st.dataframe(df_original)
     
-    if not df_unsorted.empty:
+    if not df_unsorted.empty: #and df_unsorted.notna().any().any():
         st.write("Données converties (non triées):")
         st.dataframe(df_unsorted)
         
@@ -68,7 +72,7 @@ if uploaded_file is not None:
         
         # Bouton de téléchargement
         st.download_button(
-            label="Télécharger le fichier Excel avec les valeurs converties.",
+            label="Télécharger le fichier Excel avec les trois feuilles",
             data=buffer.getvalue(),
             file_name="donnees_converties.xlsx",
             mime="application/vnd.ms-excel"
