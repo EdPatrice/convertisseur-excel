@@ -8,55 +8,70 @@ st.markdown("<br><br>", unsafe_allow_html=True)
 # Ajout de la description et exemple
 st.markdown("""
 Cette application vous aide à convertir les valeurs numériques de votre fichier Excel dans un format encodé spécifique. 
-L'application traite la première colonne de votre fichier Excel, en ne gardant que les valeurs numériques et en les convertissant selon nos règles d'encodage. 
-Par exemple, si votre fichier Excel contient une valeur comme '12345' dans la première colonne, elle sera convertie en son équivalent encodé. 
-Les valeurs non numériques seront automatiquement filtrées pour assurer une conversion précise.
+L'application traite toutes les colonnes de votre fichier Excel, en ne gardant que les valeurs numériques et en les convertissant selon nos règles d'encodage.
+Pour chaque valeur convertie, vous obtiendrez deux versions :
+- La version convertie non triée
+- La version convertie triée en ordre croissant
 """)
 st.markdown("<br><br>", unsafe_allow_html=True)
 
 # Séparation visuelle
 st.markdown("---")
 
-st.write("Téléchargez un fichier Excel pour convertir les valeurs de la première colonne.")
+st.write("Téléchargez un fichier Excel pour convertir les valeurs.")
 
 # Téléchargement de fichier
 uploaded_file = st.file_uploader("Choisissez un fichier Excel", type=["xlsx"])
 
 if uploaded_file is not None:
     # Lecture du fichier Excel
-    df = pd.read_excel(uploaded_file, header=None)
+    df_original = pd.read_excel(uploaded_file, header=None)
     
-    # Traitement des données
-    df[0] = df[0].astype(str).str.strip()
-    df['is_numeric'] = df[0].str.isnumeric()
+    # Initialisation des DataFrames pour les versions converties
+    df_unsorted = pd.DataFrame()
+    df_sorted = pd.DataFrame()
     
-    # Comptage et affichage des lignes non numériques
-    non_numeric_count = (~df['is_numeric']).sum()
-    if non_numeric_count > 0:
-        st.warning(f"Trouvé {non_numeric_count} ligne(s) contenant des valeurs non numériques. Elles seront supprimées.")
+    # Traitement de chaque colonne
+    for col in df_original.columns:
+        # Conversion en string et nettoyage
+        df_original[col] = df_original[col].astype(str).str.strip()
+        numeric_mask = df_original[col].str.isnumeric()
+        
+        if numeric_mask.any():
+            # Conversion des valeurs numériques
+            conversions = df_original[col][numeric_mask].apply(encoding)
+            unsorted_values = [x[0] for x in conversions]
+            sorted_values = [x[1] for x in conversions]
+            
+            # Ajout des colonnes converties
+            col_name = f"Col_{col+1}"
+            df_unsorted[col_name] = pd.Series(unsorted_values)
+            df_sorted[col_name] = pd.Series(sorted_values)
     
-    # Filtrage des lignes numériques
-    df = df[df['is_numeric']].drop('is_numeric', axis=1)
+    # Affichage des données
+    st.write("Données originales:")
+    st.dataframe(df_original)
     
-    # Conversion des valeurs
-    df[1] = df[0].apply(encoding)
-    
-    # Renommage des colonnes
-    df.columns = ['Original', 'Converti']
-    
-    # Affichage du tableau converti
-    st.write("Données Converties:")
-    st.dataframe(df)
-    
-    # Création d'un buffer pour sauvegarder le fichier Excel
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False)
-    
-    # Bouton de téléchargement
-    st.download_button(
-        label="Télécharger le fichier Excel converti",
-        data=buffer.getvalue(),
-        file_name="donnees_converties.xlsx",
-        mime="application/vnd.ms-excel"
-    )
+    if not df_unsorted.empty:
+        st.write("Données converties (non triées):")
+        st.dataframe(df_unsorted)
+        
+        st.write("Données converties (triées):")
+        st.dataframe(df_sorted)
+        
+        # Création d'un buffer pour sauvegarder le fichier Excel avec les trois feuilles
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df_original.to_excel(writer, sheet_name='Original', index=False)
+            df_unsorted.to_excel(writer, sheet_name='Converti_Non_Trie', index=False)
+            df_sorted.to_excel(writer, sheet_name='Converti_Trie', index=False)
+        
+        # Bouton de téléchargement
+        st.download_button(
+            label="Télécharger le fichier Excel avec les valeurs converties.",
+            data=buffer.getvalue(),
+            file_name="donnees_converties.xlsx",
+            mime="application/vnd.ms-excel"
+        )
+    else:
+        st.warning("Aucune valeur numérique n'a été trouvée dans le fichier.")
